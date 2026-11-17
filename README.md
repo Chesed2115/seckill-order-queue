@@ -38,6 +38,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\oversell-repro.ps1 -
 `demo.ps1` 会把 TTL 临时拉到 10 分钟。默认 3 秒的话，订单一超时就被扫描器
 关闭并回补库存，讲解途中库存数字会自己往上跳。
 
+第 6 组（LongAdder 版库存）每次跑的结果不固定：端到端复现率约 5%，
+大多数轮次会显示"正好 1000 件、没超卖"。脚本会按当轮实际数字走不同分支，
+不会替你编一个不存在的结论。要稳定看到超卖，要么多跑几十次，
+要么跑上面的复现率脚本，要么用 `java -cp target\classes com.chesed.seckill.bench.OversellProbe`。
+
 ## 结构
 
 ```

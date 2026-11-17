@@ -5,3 +5,5 @@ data/
 .idea/
 .vscode/
 .DS_Store
+# 成员个人信息（学号/电话/邮箱），只在本地填，不提交
+members.json
