@@ -246,6 +246,16 @@ Write-Host @"
   两个数放一起才说得清楚：跑不出来不等于没有 bug，只能说明触发条件没凑齐。
 "@ -ForegroundColor Yellow
 
+# 第 5 组（背压）的成交数每跑一次都不一样：队列容量 64、4 个消费者，
+# 能卖出去多少完全取决于压测那几秒里消费者抢到了几次。
+# 所以这一组的结论不能写死数字，只能讲机制。
+Write-Host @"
+  第 5 组（背压）那个成交数每跑一次都不一样，别把它当性能指标 ——
+  队列满就拒，能卖出去多少取决于消费者在这几秒里抢到了几次。
+  它要说明的只有一件事：队列不能无界，满了就得明确拒绝并回补库存，
+  这样过载时是"拒绝得干脆"，而不是"内存一路涨到 OOM"。
+"@ -ForegroundColor Gray
+
 Write-Host ""
 Write-Host ("─" * 76) -ForegroundColor DarkCyan
 Write-Host "  服务仍在运行，可以打开面板继续讲" -ForegroundColor Green
