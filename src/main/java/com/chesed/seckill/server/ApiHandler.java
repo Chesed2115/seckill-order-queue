@@ -144,6 +144,11 @@ public final class ApiHandler {
     private synchronized void rebuild(Config c) {
         SeckillEngine old = engine;
         if (old != null) {
+            // 先把旧队列里已经受理的任务处理完再停消费者。
+            // 不排空就直接 close()，队列里剩下的任务会被丢掉——它们已经扣过库存、
+            // 也已经被算进 success，却没落库，于是对账里「已占」比「成交数」少一截
+            // （实测第 3 组成交 1000、只落库 136）。
+            old.awaitDrain(3000);
             old.close();
             // 旧引擎留下的 CREATED 订单是拿旧库存扣的，必须在这里一次性结清。
             // 否则新一轮的超时扫描器会把它们扫成过期，再调自己那颗 stock 的 restore()，

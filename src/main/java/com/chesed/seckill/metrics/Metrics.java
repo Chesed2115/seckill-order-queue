@@ -108,6 +108,11 @@ public final class Metrics {
         queuePeakDepth.set(0);
         queueCurrentDepth.set(0);
         startNanos = System.nanoTime();
+        // 采样基线也得跟着清零。否则 reset 之后第一次读瞬时吞吐，
+        // dn = 0 - 上一轮的累计数 是负数，面板上会看到负的吞吐
+        // （实测 -166700 单/秒）。
+        lastSampleNanos = startNanos;
+        lastSampleTotal = 0;
     }
 
     public long total() {
