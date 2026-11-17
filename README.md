@@ -25,6 +25,19 @@ java -cp target/classes com.chesed.seckill.bench.QueueBench docs/experiments/res
 java -cp target/classes com.chesed.seckill.bench.OversellProbe docs/experiments/results-oversell.csv
 ```
 
+## 现场演示
+
+```powershell
+# 六组对照，从清库启动一直跑到结论，服务留在 8099 端口方便接着开面板
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\demo.ps1
+
+# 端到端超卖复现率（40 次重复，约 6 分钟），写入 results-oversell-e2e.csv
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\oversell-repro.ps1 -Runs 40
+```
+
+`demo.ps1` 会把 TTL 临时拉到 10 分钟。默认 3 秒的话，订单一超时就被扫描器
+关闭并回补库存，讲解途中库存数字会自己往上跳。
+
 ## 结构
 
 ```
