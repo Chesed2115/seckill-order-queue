@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>秒杀订单处理队列优化 · 监控面板</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>秒杀订单处理队列优化</h1>
+    <span class="sub">Seckill Order Queue Optimization</span>
+  </div>
+  <div class="statusline">
+    <span id="conn" class="pill pill-warn">连接中…</span>
+    <span id="uptime" class="mono">--</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- 第一屏：关键指标 -->
+  <section class="cards">
+    <div class="card">
+      <div class="card-label">剩余库存</div>
+      <div class="card-value" id="k-stock">--</div>
+      <div class="card-foot" id="k-stock-sub">策略 --</div>
+    </div>
+    <div class="card">
+      <div class="card-label">成交订单</div>
+      <div class="card-value accent" id="k-success">--</div>
+      <div class="card-foot" id="k-success-sub">总请求 --</div>
+    </div>
+    <div class="card">
+      <div class="card-label">实时吞吐</div>
+      <div class="card-value" id="k-tps">--</div>
+      <div class="card-foot">req / s</div>
+    </div>
+    <div class="card">
+      <div class="card-label">P99 延迟</div>
+      <div class="card-value" id="k-p99">--</div>
+      <div class="card-foot" id="k-p99-sub">P50 --</div>
+    </div>
+    <div class="card">
+      <div class="card-label">队列深度</div>
+      <div class="card-value" id="k-qdepth">--</div>
+      <div class="card-foot" id="k-qdepth-sub">峰值 --</div>
+    </div>
+    <div class="card danger">
+      <div class="card-label">超卖 / 重复</div>
+      <div class="card-value" id="k-bad">0 / 0</div>
+      <div class="card-foot" id="k-bad-sub">对账 --</div>
+    </div>
+  </section>
+
+  <!-- 第二屏：图表 + 配置 -->
+  <section class="grid2">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>吞吐与延迟趋势</h2>
+        <span class="hint">最近 60 秒</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>运行配置</h2></div>
+      <form id="cfg-form" class="cfg">
+        <label>库存策略
+          <select name="stock">
+            <option value="CAS">CAS（AtomicInteger 自旋）</option>
+            <option value="Sync">synchronized</option>
+            <option value="Lock">ReentrantLock</option>
+            <option value="Stamped">StampedLock 乐观读</option>
+            <option value="Adder">LongAdder + 锁</option>
+            <option value="AdderUnsafe">LongAdder 不加锁（反例）</option>
+          </select>
+        </label>
+        <label>任务队列
+          <select name="queue">
+            <option value="ArrayBlockingQueue">ArrayBlockingQueue</option>
+            <option value="LinkedBlockingQueue">LinkedBlockingQueue</option>
+            <option value="LinkedTransferQueue">LinkedTransferQueue</option>
+            <option value="MpscRing">MpscRingQueue（自写无锁）</option>
+          </select>
+        </label>
+        <label>队列容量
+          <select name="queueCapacity">
+            <option>256</option><option>1024</option>
+            <option selected>8192</option><option>16384</option>
+          </select>
+        </label>
+        <label>消费者线程
+          <select name="workers">
+            <option>4</option><option>8</option><option selected>16</option>
+            <option>24</option><option>32</option><option>48</option>
+          </select>
+        </label>
+        <label>请求去重
+          <select name="dedup">
+            <option value="map">ConcurrentHashMap</option>
+            <option value="bloom">布隆过滤器</option>
+            <option value="none">关闭</option>
+          </select>
+        </label>
+        <label>限流策略
+          <select name="limiter">
+            <option value="none">不限制</option>
+            <option value="token">令牌桶</option>
+            <option value="sliding">滑动窗口</option>
+          </select>
+        </label>
+        <label>限流 QPS
+          <input type="number" name="limitQps" value="50000" min="100" step="1000">
+        </label>
+        <label>初始库存
+          <input type="number" name="inventory" value="1000" min="1" max="1000000">
+        </label>
+        <label>持久化
+          <select name="store">
+            <option value="h2">H2 文件库</option>
+            <option value="memory">内存（不落库）</option>
+          </select>
+        </label>
+        <div class="cfg-actions">
+          <button type="submit" class="btn primary">应用配置并重置</button>
+        </div>
+      </form>
+      <div class="describe" id="describe"></div>
+    </div>
+  </section>
+
+  <!-- 第三屏：压测控制 + 结果分布 -->
+  <section class="grid2">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>负载发生器</h2>
+        <span class="hint">进程内直接打引擎，排除 HTTP 开销</span>
+      </div>
+      <form id="load-form" class="cfg inline">
+        <label>并发线程
+          <input type="number" name="concurrency" value="128" min="1" max="1024">
+        </label>
+        <label>总请求数
+          <input type="number" name="total" value="20000" min="100" step="1000">
+        </label>
+        <label class="chk"><input type="checkbox" name="sameUser"> 全部同一用户</label>
+        <label class="chk"><input type="checkbox" name="reuseRequestId"> 复用同一 requestId</label>
+        <div class="cfg-actions">
+          <button type="button" class="btn" id="btn-start">开始</button>
+          <button type="button" class="btn ghost" id="btn-stop">停止</button>
+        </div>
+      </form>
+      <div class="progress"><div class="bar" id="load-bar"></div></div>
+      <div class="progress-text" id="load-text">未开始</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>请求结果分布</h2></div>
+      <div class="chart-wrap short"><canvas id="chart-pie"></canvas></div>
+    </div>
+  </section>
+
+  <!-- 第四屏：订单与对账 -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>订单与一致性对账</h2>
+      <span class="hint">恒等式：已占用 + 剩余 = 初始库存</span>
+    </div>
+    <div class="reconcile" id="reconcile"></div>
+    <div class="table-wrap">
+      <table class="orders">
+        <thead>
+          <tr><th>订单号</th><th>用户</th><th>状态</th><th>创建时间</th></tr>
+        </thead>
+        <tbody id="orders-body">
+          <tr><td colspan="4" class="empty">暂无订单</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <span>编程能力提升 · 期末项目 · 选题 #15</span>
+  <span id="foot-cfg" class="mono"></span>
+</footer>
+
+<script src="/vendor/chart.umd.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
