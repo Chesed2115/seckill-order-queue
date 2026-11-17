@@ -68,6 +68,16 @@ public final class NullOrderStore implements OrderStore {
     }
 
     @Override
+    public long maxOrderId() {
+        return 0L;
+    }
+
+    @Override
+    public int closeAllCreated() {
+        return 0;
+    }
+
+    @Override
     public Reconciliation reconcile(int initialStock) {
         long n = saved.sum();
         return new Reconciliation(n, 0, 0, 0, initialStock, initialStock, true);

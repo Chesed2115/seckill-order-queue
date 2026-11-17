@@ -145,6 +145,21 @@ public final class ApiHandler {
         SeckillEngine old = engine;
         if (old != null) {
             old.close();
+            // 旧引擎留下的 CREATED 订单是拿旧库存扣的，必须在这里一次性结清。
+            // 否则新一轮的超时扫描器会把它们扫成过期，再调自己那颗 stock 的 restore()，
+            // 等于把上一轮卖掉的货补进这一轮的库存里——实测能让库存从 0 涨回 1000。
+            try {
+                old.store().closeAllCreated();
+            } catch (RuntimeException ignore) {
+                // 存储不支持就跳过，不影响换配置本身
+            }
+            // SeckillEngine.close() 只停消费者线程，不关存储；这里得自己关，
+            // 否则每切一次配置就漏一个 H2 连接。
+            try {
+                old.store().close();
+            } catch (RuntimeException ignore) {
+                // 同上
+            }
         }
         Stock stock = buildStock(c.stock(), c.inventory());
         TaskQueue<SeckillEngine.OrderTask> queue = buildQueue(c.queue(), c.queueCapacity());

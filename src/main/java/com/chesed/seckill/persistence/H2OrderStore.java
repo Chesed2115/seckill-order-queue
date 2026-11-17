@@ -187,7 +187,27 @@ public final class H2OrderStore implements OrderStore {
     }
 
     @Override
-    public synchronized Reconciliation reconcile(int initialStock) {        long created = countByStatus(Order.Status.CREATED);
+    public synchronized long maxOrderId() {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT COALESCE(MAX(order_id), 0) FROM orders")) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        } catch (SQLException e) {
+            throw new IllegalStateException("查询最大订单号失败", e);
+        }
+    }
+
+    @Override
+    public synchronized int closeAllCreated() {
+        try (Statement st = conn.createStatement()) {
+            return st.executeUpdate("UPDATE orders SET status='CLOSED' WHERE status='CREATED'");
+        } catch (SQLException e) {
+            throw new IllegalStateException("批量关闭未完成订单失败", e);
+        }
+    }
+
+    @Override
+    public synchronized Reconciliation reconcile(int initialStock) {
+        long created = countByStatus(Order.Status.CREATED);
         long paid = countByStatus(Order.Status.PAID);
         long closed = countByStatus(Order.Status.CLOSED);
         long dead = countByStatus(Order.Status.DEAD);

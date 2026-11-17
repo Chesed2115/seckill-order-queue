@@ -685,6 +685,16 @@ public final class ExperimentRunner {
         }
 
         @Override
+        public long maxOrderId() {
+            return delegate.maxOrderId();
+        }
+
+        @Override
+        public int closeAllCreated() {
+            return delegate.closeAllCreated();
+        }
+
+        @Override
         public Reconciliation reconcile(int initialStock) {
             return delegate.reconcile(initialStock);
         }

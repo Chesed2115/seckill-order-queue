@@ -38,7 +38,7 @@ public final class SeckillEngine implements AutoCloseable {
     private final Metrics metrics;
     private final OrderWorker[] workers;
 
-    private final AtomicLong orderSeq = new AtomicLong(1_000_000L);
+    private final AtomicLong orderSeq;
     private final long ttlMillis;
     private final boolean async;
 
@@ -68,12 +68,31 @@ public final class SeckillEngine implements AutoCloseable {
         this.metrics = metrics;
         this.ttlMillis = ttlMillis;
         this.async = async;
+        // 订单号接着库里已有的最大号往下发。H2 是文件库，重启或换配置后旧订单还在，
+        // 序列若从固定值开始，新订单会全部撞主键进死信——实测切换一次配置就丢 200 单。
+        this.orderSeq = new AtomicLong(Math.max(1_000_000L, safeMaxOrderId(store) + 1));
         this.workers = new OrderWorker[Math.max(1, workerCount)];
         for (int i = 0; i < workers.length; i++) {
             workers[i] = new OrderWorker(i, this);
             if (async) {
                 workers[i].start();
             }
+        }
+    }
+
+    /**
+     * 取库里已有的最大订单号，失败时退回 0。
+     *
+     * <p>这里不能抛异常：实验里用的空存储、故障注入存储都可能不支持这个查询，
+     * 启动阶段因为一个统计查询就崩掉不划算。退回 0 就是"从默认起点开始发"，
+     * 和修复前的行为一致，不会更糟。
+     * </p>
+     */
+    private static long safeMaxOrderId(OrderStore store) {
+        try {
+            return store.maxOrderId();
+        } catch (RuntimeException e) {
+            return 0L;
         }
     }
 

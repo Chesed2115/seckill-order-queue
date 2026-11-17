@@ -64,6 +64,30 @@ public final class MemoryOrderStore implements OrderStore {
     }
 
     @Override
+    public long maxOrderId() {
+        long max = 0L;
+        for (Long id : byId.keySet()) {
+            if (id > max) {
+                max = id;
+            }
+        }
+        return max;
+    }
+
+    @Override
+    public int closeAllCreated() {
+        int n = 0;
+        for (Order o : byId.values()) {
+            if (o.status() == Order.Status.CREATED) {
+                if (byId.replace(o.orderId(), o, o.withStatus(Order.Status.CLOSED))) {
+                    n++;
+                }
+            }
+        }
+        return n;
+    }
+
+    @Override
     public Reconciliation reconcile(int initialStock) {
         long sold = countByStatus(Order.Status.PAID) + countByStatus(Order.Status.CREATED);
         long closed = countByStatus(Order.Status.CLOSED);
